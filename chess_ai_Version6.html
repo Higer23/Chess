@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Satranç AI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --white-square: #f0d9b5; --black-square: #b58863;
+      --highlight: #ffe066; --movefrom: #aaf1ff;
+      --white-piece: #222; --black-piece: #111;
+      --theme-bg: #f5f5f7; --theme-fg: #141416;
+      --timer-bg: #fff; --timer-fg: #000;
+      --move-bg: #eaeaea; --logo-shadow: 0 2px 12px #6663;
+      --border-board: #5552;
+    }
+    body { background: var(--theme-bg); color: var(--theme-fg); font-family: system-ui, Arial, sans-serif; margin:0; padding:0; min-height:100vh; transition:background 0.3s,color 0.3s;}
+    body.dark {
+      --white-square:#222; --black-square:#444; --highlight:#4656e4; --movefrom:#1e7086;
+      --white-piece:#fafaf7; --black-piece:#e3e3e3; --theme-bg:#12121a; --theme-fg:#f8f8f8;
+      --timer-bg:#232338; --timer-fg:#fffc; --move-bg:#232338; --border-board:#6669;
+    }
+    .container { display: flex; flex-wrap: wrap; gap: 32px; max-width: 1200px; margin: 20px auto; align-items: start; justify-content: center;}
+    .left-panel { display: flex; flex-direction: column; align-items: center; min-width: 370px; gap: 16px;}
+    .logo { display: block; width: 150px; margin: 0 auto 12px auto; box-shadow: var(--logo-shadow); border-radius: 12px; background: #fff; padding: 8px;}
+    .board-wrapper { position: relative; width: 360px; height: 360px; background: #80808018; box-shadow: 0 0 8px #0001; border-radius: 10px; overflow: hidden; user-select: none; margin-bottom: 10px;}
+    .chess-board { display: grid; width: 360px; height: 360px; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); border: 3px solid var(--border-board); border-radius: 10px;}
+    .square { width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 500; cursor: pointer; box-sizing: border-box; transition: background 0.15s; position: relative; z-index: 1; user-select: none;}
+    .white { background: var(--white-square);}
+    .black { background: var(--black-square);}
+    .square.selected, .square.movefrom { background: var(--movefrom)!important; outline: 2.5px solid #28b3e6; z-index:2;}
+    .square.highlight { background: var(--highlight)!important; outline: 2.5px solid #fcd900; z-index:2;}
+    .piece { pointer-events: none; color: var(--black-piece); filter: drop-shadow(0 1px 0 #0001); font-size: 31px; font-family: system-ui, "Segoe UI Emoji";}
+    .piece.white { color: var(--white-piece);}
+    .piece.black { color: var(--black-piece);}
+    .coords { position: absolute; font-size: 10px; color: #888a; left: 4px; bottom: 4px; user-select: none; pointer-events: none;}
+    .top-bar { display: flex; flex-direction: row; align-items: center; gap: 1.2em; justify-content: center; margin-bottom: 8px;}
+    .theme-btn, .newgame-btn { padding: 7px 20px; border-radius: 7px; border: none; background: #e5e5e5; cursor: pointer; font-weight: bold; font-size: 14px; margin: 0 3px; transition: background 0.2s, color 0.2s;}
+    .theme-btn:hover, .newgame-btn:hover { background: #bcdfff;}
+    body.dark .theme-btn, body.dark .newgame-btn { background: #2d3346; color: #fff;}
+    .timer-row { display: flex; gap: 15px; justify-content: center; margin-bottom: 8px;}
+    .timer { background: var(--timer-bg); color: var(--timer-fg); font-size: 18px; font-family: monospace; border-radius: 8px; padding: 8px 15px; min-width: 90px; text-align: center; box-shadow: 0 2px 4px #0001;}
+    .timer.active { border: 2px solid #00bfff;}
+    .move-list-box { background: var(--move-bg); border-radius: 10px; padding: 13px 18px; margin-bottom: 12px; max-width: 260px; box-shadow: 0 0 4px #0002; min-height: 140px;}
+    .move-list-title { font-size: 16px; font-weight: bold; margin-bottom: 6px;}
+    .move-list { font-size: 15px; list-style: none; padding: 0; margin: 0; max-height: 210px; overflow-y: auto;}
+    .move-list li { margin-bottom: 2px; white-space: pre; font-family: "JetBrains Mono", "Fira Mono", monospace; letter-spacing: 1px;}
+    .message-bar { font-size: 16px; font-weight: bold; margin: 10px 0 5px 0; min-height: 21px; color: #186095;}
+    body.dark .message-bar { color: #ffe066;}
+    .rules-link { display: block; text-align: right; font-size: 15px; margin-top: 8px; margin-bottom: 0; text-decoration: underline; color: #1b4fff; font-weight: 500;}
+    body.dark .rules-link { color: #fff2a6;}
+    .animate-move { animation: piece-move 0.38s cubic-bezier(.37,.17,.79,.74);}
+    @keyframes piece-move { from { transform: scale(1.4) rotate(-5deg); opacity: 0.3;} to { transform: scale(1) rotate(0); opacity: 1;}}
+    @media (max-width: 800px) {
+      .container { flex-direction: column; gap: 14px;}
+      .left-panel { min-width: 0; }
+      .board-wrapper, .chess-board { width: 94vw; height: 94vw; max-width: 390px; max-height: 390px;}
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="left-panel">
+    <img class="logo" src="HİGER_20250317_154048_0000.png" alt="Site Logosu">
+    <div class="top-bar">
+      <button class="newgame-btn" id="newGameBtn">Yeni Oyun</button>
+      <button class="theme-btn" id="themeBtn">🌙 / ☀️ Tema</button>
+    </div>
+    <div class="timer-row">
+      <div class="timer" id="whiteTimer">15:00</div>
+      <div class="timer" id="blackTimer">15:00</div>
+    </div>
+    <div class="message-bar" id="message"></div>
+    <div class="board-wrapper"><div id="chessBoard" class="chess-board"></div></div>
+  </div>
+  <div>
+    <div class="move-list-box">
+      <div class="move-list-title">Hamleler</div>
+      <ul class="move-list" id="moveList"></ul>
+    </div>
+    <a class="rules-link" href="#kurallar" id="rulesLink">Satranç Kuralları</a>
+    <div id="kurallar" style="display:none;padding:14px 8px 0 2px;">
+      <h3>Satranç Kuralları</h3>
+      <ul>
+        <li><b>Piyon</b>: Düz gider, ilk hamlede iki kare; çaprazda taş alır.</li>
+        <li><b>At</b>: L şeklinde gider. Engellerin üstünden atlar.</li>
+        <li><b>Fil</b>: Sadece çapraz gider.</li>
+        <li><b>Kale</b>: Yalnızca düz (yatay/dikey) gider.</li>
+        <li><b>Vezir</b>: Hem düz hem çapraz gider.</li>
+        <li><b>Şah</b>: Her yöne sadece 1 kare gider.</li>
+        <li>Taşlar kendi taşını atlayamaz (At hariç).</li>
+        <li>Şah tehdit altına giremez ("Şah" çekildiğinde, tehditten çıkmalı).</li>
+        <li>Mat: Şah tehditten kurtulamıyorsa oyun biter.</li>
+        <li>Pat: Hamle yapacak taş kalmadıysa ve şahda tehdit yoksa beraberlik.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+<script>
+const PIECES = {
+  'P': {unicode: '♙', color: 'white'}, 'N': {unicode: '♘', color: 'white'}, 'B': {unicode: '♗', color: 'white'},
+  'R': {unicode: '♖', color: 'white'}, 'Q': {unicode: '♕', color: 'white'}, 'K': {unicode: '♔', color: 'white'},
+  'p': {unicode: '♟', color: 'black'}, 'n': {unicode: '♞', color: 'black'}, 'b': {unicode: '♝', color: 'black'},
+  'r': {unicode: '♜', color: 'black'}, 'q': {unicode: '♛', color: 'black'}, 'k': {unicode: '♚', color: 'black'},
+  '': {unicode: '', color: ''}
+};
+const FILES = ['a','b','c','d','e','f','g','h'];
+let gameState = {}, selectedSquare = null, highlights = [];
+let whiteTime = 900, blackTime = 900, whiteInterval, blackInterval;
+let currentPlayer = 'white', isGameOver = false;
+const AI_MOVE_DELAY = [500, 1200];
+const START_POS = [
+  ['r','n','b','q','k','b','n','r'],
+  ['p','p','p','p','p','p','p','p'],
+  ['','','','','','','',''],['','','','','','','',''],
+  ['','','','','','','',''],['','','','','','','',''],
+  ['P','P','P','P','P','P','P','P'],
+  ['R','N','B','Q','K','B','N','R'],
+];
+
+function cloneBoard(board) { return board.map(row=>row.slice()); }
+function opposite(color){return color==='white'?'black':'white';}
+function pieceColor(piece){return piece?PIECES[piece].color:'';}
+function posToStr([r,c]){ return FILES[c]+(8-r);}
+function drawBoard(board) {
+  const root = document.getElementById('chessBoard');
+  root.innerHTML = '';
+  for(let r=0; r<8; r++) for(let c=0; c<8; c++) {
+    const sq = document.createElement('div');
+    sq.className = 'square '+((r+c)%2?'black':'white');
+    sq.dataset.row = r; sq.dataset.col = c; sq.id = `sq-${r}${c}`;
+    if ((r===7&&c===0)|| (r===0&&c===7) ) {
+      let coords = document.createElement('span');
+      coords.className = "coords";
+      coords.textContent = FILES[c]+(8-r);
+      sq.appendChild(coords);
+    }
+    let p = board[r][c];
+    if (p) {
+      let el = document.createElement('span');
+      el.className = `piece ${PIECES[p].color}`;
+      el.textContent = PIECES[p].unicode;
+      sq.appendChild(el);
+    }
+    root.appendChild(sq);
+  }
+}
+function clearHighlights() {
+  highlights.forEach(([r,c])=>{
+    let el = document.getElementById(`sq-${r}${c}`);
+    if(el) el.classList.remove('highlight','selected','movefrom','animate-move');
+  });
+  highlights = [];
+}
+function getMoves(board, r, c, validateCheck=true) {
+  let moves = [], piece=board[r][c];
+  if (!piece) return [];
+  let color = PIECES[piece].color, opp = opposite(color);
+  function slide(dr,dc,limit=8) {
+    for(let i=1; i<limit; i++) {
+      let nr=r+dr*i, nc=c+dc*i;
+      if(nr<0||nr>7||nc<0||nc>7) break;
+      let target=board[nr][nc];
+      if(target===''||target===undefined) moves.push([nr,nc]);
+      else if(pieceColor(target)===opp){ moves.push([nr,nc]); break;}
+      else break;
+    }
+  }
+  if (piece==='P'||piece==='p') {
+    let dir=piece==='P'?-1:1, startRow=piece==='P'?6:1;
+    if(board[r+dir]&&board[r+dir][c]==='') moves.push([r+dir,c]);
+    if(r===startRow && board[r+dir][c]==='' && board[r+2*dir][c]==='') moves.push([r+2*dir,c]);
+    for(let dc of [-1,1]) {
+      let nr=r+dir,nc=c+dc;
+      if(nr>=0&&nr<=7&&nc>=0&&nc<=7) {
+        let target=board[nr][nc];
+        if(target&&target!==''&&pieceColor(target)===opp) moves.push([nr,nc]);
+      }
+    }
+  }
+  if (piece==='N'||piece==='n') {
+    for(let [dr,dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+      let nr=r+dr,nc=c+dc;
+      if(nr>=0&&nr<=7&&nc>=0&&nc<=7) {
+        let target=board[nr][nc];
+        if(!target||pieceColor(target)===opp) moves.push([nr,nc]);
+      }
+    }
+  }
+  if (piece==='B'||piece==='b') { slide(1,1); slide(1,-1); slide(-1,1); slide(-1,-1);}
+  if (piece==='R'||piece==='r') { slide(1,0); slide(-1,0); slide(0,1); slide(0,-1);}
+  if (piece==='Q'||piece==='q') { slide(1,1); slide(1,-1); slide(-1,1); slide(-1,-1); slide(1,0); slide(-1,0); slide(0,1); slide(0,-1);}
+  if (piece==='K'||piece==='k') {
+    for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++) if(dr||dc) {
+      let nr=r+dr,nc=c+dc;
+      if(nr>=0&&nr<=7&&nc>=0&&nc<=7) {
+        let target=board[nr][nc];
+        if(!target||pieceColor(target)===opp) moves.push([nr,nc]);
+      }
+    }
+    // Rok sade (isteğe bağlı, güvenlik yok)
+    if(validateCheck && !gameState[`${color}Moved`]) {
+      if(!gameState[`${color}RookMovedH`] && board[r][c+1]==='' && board[r][c+2]==='' && board[r][c+3]&&(pieceColor(board[r][c+3])===color))
+        moves.push([r,c+2]);
+      if(!gameState[`${color}RookMovedA`] && board[r][c-1]==='' && board[r][c-2]==='' && board[r][c-3]==='' && board[r][c-4]&&(pieceColor(board[r][c-4])===color))
+        moves.push([r,c-2]);
+    }
+  }
+  if (validateCheck) moves = moves.filter(([nr,nc]) => !moveLeavesKingInCheck(board,r,c,nr,nc,color));
+  return moves;
+}
+function moveLeavesKingInCheck(board,fr,fc,tr,tc,color) {
+  let newBoard = cloneBoard(board);
+  if((PIECES[board[fr][fc]].unicode==='♔'||PIECES[board[fr][fc]].unicode==='♚') && Math.abs(tc-fc)===2) {
+    newBoard[fr][tc] = newBoard[fr][fc]; newBoard[fr][fc] = '';
+    if(tc>fc) { newBoard[fr][tc-1] = newBoard[fr][7]; newBoard[fr][7]=''; }
+    else { newBoard[fr][tc+1] = newBoard[fr][0]; newBoard[fr][0]=''; }
+  } else { newBoard[tr][tc] = newBoard[fr][fc]; newBoard[fr][fc] = ''; }
+  return isKingInCheck(newBoard, color);
+}
+function isKingInCheck(board, color) {
+  let kingPiece = color==='white'?'K':'k', kingPos=null;
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++) if(board[r][c]===kingPiece) kingPos=[r,c];
+  if(!kingPos) return true;
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++) {
+    if(pieceColor(board[r][c])===opposite(color)) {
+      let moves = getMoves(board,r,c,false);
+      if(moves.some(([nr,nc])=>nr===kingPos[0]&&nc===kingPos[1])) return true;
+    }
+  }
+  return false;
+}
+function allLegalMoves(board, color) {
+  let moves=[]; for(let r=0;r<8;r++) for(let c=0;c<8;c++) if(pieceColor(board[r][c])===color) {
+    getMoves(board,r,c).forEach(([nr,nc])=>{ moves.push({from:[r,c],to:[nr,nc]}) });
+  }
+  return moves;
+}
+function checkMateOrStaleMate(board, color) {
+  if (!allLegalMoves(board, color).length) return isKingInCheck(board, color)?'mate':'stalemate';
+  return '';
+}
+function moveNotation(from, to, piece, capture) { return `${posToStr(from)}${capture?'x':'→'}${posToStr(to)}`;}
+function newGame() {
+  gameState = {board: cloneBoard(START_POS), whiteTimer:900, blackTimer:900, moveList:[], turn:'white',
+    whiteMoved:false, blackMoved:false, whiteRookMovedA:false, whiteRookMovedH:false, blackRookMovedA:false, blackRookMovedH:false};
+  selectedSquare = null; isGameOver = false; whiteTime = 900; blackTime = 900;
+  drawBoard(gameState.board); clearHighlights(); updateTimers(); updateMoveList();
+  setMessage('Beyaz ile başlıyorsunuz.'); clearInterval(whiteInterval); clearInterval(blackInterval); startTimer('white');
+  if(currentPlayer==='black') currentPlayer='white';
+}
+function startTimer(color) {
+  clearInterval(whiteInterval); clearInterval(blackInterval);
+  if(isGameOver) return;
+  if(color==='white') {
+    document.getElementById('whiteTimer').classList.add('active');
+    document.getElementById('blackTimer').classList.remove('active');
+    whiteInterval = setInterval(()=>{
+      whiteTime--; updateTimers();
+      if(whiteTime<=0) gameOver('Süreniz doldu. Kaybettiniz!');
+    }, 1000);
+  } else {
+    document.getElementById('blackTimer').classList.add('active');
+    document.getElementById('whiteTimer').classList.remove('active');
+    blackInterval = setInterval(()=>{
+      blackTime--; updateTimers();
+      if(blackTime<=0) gameOver('AI süresi doldu. Kazandınız!');
+    }, 1000);
+  }
+}
+function stopTimers() {
+  clearInterval(whiteInterval); clearInterval(blackInterval);
+  document.getElementById('whiteTimer').classList.remove('active');
+  document.getElementById('blackTimer').classList.remove('active');
+}
+function updateTimers() {
+  document.getElementById('whiteTimer').textContent = timeFormat(whiteTime);
+  document.getElementById('blackTimer').textContent = timeFormat(blackTime);
+}
+function timeFormat(s) {let m = Math.floor(s/60), ss = (s%60).toString().padStart(2,'0'); return m+":"+ss;}
+function setMessage(msg) { document.getElementById('message').textContent = msg;}
+function updateMoveList() {
+  let ul = document.getElementById('moveList'); ul.innerHTML = '';
+  gameState.moveList.forEach(m=> { let li=document.createElement('li'); li.textContent = m; ul.appendChild(li); });
+}
+document.getElementById('chessBoard').onclick = function(e) {
+  if(isGameOver||currentPlayer!=='white') return;
+  let sq = e.target.closest('.square'); if(!sq) return;
+  let r=+sq.dataset.row, c=+sq.dataset.col; let board=gameState.board; let piece=board[r][c];
+  if(selectedSquare) {
+    let [sr,sc]=selectedSquare;
+    if(sr===r&&sc===c) { clearHighlights(); selectedSquare=null; return;}
+    let moves=getMoves(board,sr,sc);
+    let isValid = moves.some(([nr,nc])=>nr===r&&nc===c);
+    if(isValid) { playMove([sr,sc],[r,c]); clearHighlights(); selectedSquare = null;}
+    else setMessage('Geçersiz hamle.');
+  } else if(piece&&pieceColor(piece)==='white') {
+    selectedSquare=[r,c]; clearHighlights();
+    let moves = getMoves(board,r,c); highlights = moves.concat([[r,c]]);
+    moves.forEach(([nr,nc]) => {document.getElementById(`sq-${nr}${nc}`).classList.add('highlight');});
+    document.getElementById(`sq-${r}${c}`).classList.add('selected');
+  }
+};
+function playMove(from,to,isAI=false) {
+  let [fr,fc]=from, [tr,tc]=to, board=gameState.board, piece=board[fr][fc], target=board[tr][tc];
+  if((piece==='K'||piece==='k') && Math.abs(tc-fc)===2) {
+    if(tc>fc) { board[tr][tc] = piece; board[fr][fc] = ''; board[fr][tc-1]=board[fr][7]; board[fr][7]=''; }
+    else { board[tr][tc]=piece; board[fr][fc]=''; board[fr][tc+1]=board[fr][0]; board[fr][0]=''; }
+    if(piece==='K') gameState.whiteMoved=true; if(piece==='k') gameState.blackMoved=true;
+  } else { board[tr][tc]=piece; board[fr][fc]=''; }
+  if(piece==='K') gameState.whiteMoved=true; if(piece==='k') gameState.blackMoved=true;
+  if(piece==='R' && fc===0 && fr===7) gameState.whiteRookMovedA=true;
+  if(piece==='R' && fc===7 && fr===7) gameState.whiteRookMovedH=true;
+  if(piece==='r' && fc===0 && fr===0) gameState.blackRookMovedA=true;
+  if(piece==='r' && fc===7 && fr===0) gameState.blackRookMovedH=true;
+  if((piece==='P'&&tr===0)||(piece==='p'&&tr===7)) board[tr][tc]=piece==='P'?'Q':'q';
+  let capture = target!==''; let moveStr = (isAI?'AI: ':'') + PIECES[piece].unicode + ' ' + moveNotation(from,to,piece,capture);
+  gameState.moveList.push(moveStr); updateMoveList(); drawBoard(board);
+  let sqTo = document.getElementById(`sq-${tr}${tc}`); if(sqTo) sqTo.classList.add('animate-move');
+  currentPlayer = opposite(currentPlayer);
+  if(currentPlayer==='white') { setMessage('Sıra sende!'); startTimer('white'); }
+  else { setMessage('AI düşünüyor...'); startTimer('black'); setTimeout(aiMove, Math.random()*(AI_MOVE_DELAY[1]-AI_MOVE_DELAY[0])+AI_MOVE_DELAY[0]); }
+  let mate = checkMateOrStaleMate(board, currentPlayer);
+  if(mate==='mate') { setMessage((currentPlayer==='white'?'AI':'Siz')+' mat oldu, oyun bitti!'); isGameOver = true; stopTimers();}
+  if(mate==='stalemate') { setMessage('Berabere (Pat)!'); isGameOver = true; stopTimers();}
+}
+function aiMove() {
+  if(isGameOver || currentPlayer!=='black') return;
+  let moves = allLegalMoves(gameState.board,'black');
+  if(!moves.length) {
+    let mate = checkMateOrStaleMate(gameState.board, 'black');
+    if(mate==='mate') setMessage('AI mat oldu, kazandınız!');
+    else setMessage('Berabere (Pat)!');
+    isGameOver=true; stopTimers(); return;
+  }
+  let best = null, bestScore = -Infinity;
+  moves.forEach(m=>{
+    let score = aiEvaluateMove(gameState.board, m.from, m.to);
+    if(score>bestScore) { bestScore=score; best=m; }
+  });
+  if(!best) { best = moves[Math.floor(Math.random()*moves.length)]; console.warn('AI invalid move attempted'); }
+  playMove(best.from, best.to, true);
+}
+function aiEvaluateMove(board, from, to) {
+  let tempBoard = cloneBoard(board), piece = tempBoard[from[0]][from[1]], target = tempBoard[to[0]][to[1]], score = 0;
+  if(target) score += pieceValue(target)*10;
+  tempBoard[to[0]][to[1]] = piece; tempBoard[from[0]][from[1]] = '';
+  if(checkMateOrStaleMate(tempBoard,'white')==='mate') score += 100;
+  if(isKingInCheck(tempBoard,'white')) score += 15;
+  if(!isKingInCheck(tempBoard,'black')) score += 5;
+  if(pieceColor(piece)==='black' && isSquareAttacked(tempBoard,to[0],to[1],'white') && !target) score -= pieceValue(piece)*8;
+  if(isKingInCheck(tempBoard,'black')) score -= 50;
+  score += Math.random()*1.6;
+  return score;
+}
+function pieceValue(piece) { switch(piece.toLowerCase()) { case 'p': return 1; case 'n': case 'b': return 3; case 'r': return 5; case 'q': return 9; case 'k': return 50; default: return 0; } }
+function isSquareAttacked(board, r, c, byColor) {
+  for(let rr=0; rr<8; rr++) for(let cc=0; cc<8; cc++) {
+    if(pieceColor(board[rr][cc])===byColor) {
+      let moves = getMoves(board,rr,cc,false);
+      if(moves.some(([nr,nc])=>nr===r&&nc===c)) return true;
+    }
+  }
+  return false;
+}
+function gameOver(msg) { setMessage(msg); isGameOver = true; stopTimers();}
+document.getElementById('themeBtn').onclick = function() { document.body.classList.toggle('dark'); };
+document.getElementById('newGameBtn').onclick = function() { newGame(); };
+document.getElementById('rulesLink').onclick = function(e) {
+  e.preventDefault();
+  let div = document.getElementById('kurallar');
+  div.style.display=(div.style.display==='none'||div.style.display==='')?'block':'none';
+};
+newGame();
+</script>
+</body>
+</html>
