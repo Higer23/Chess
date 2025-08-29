@@ -101,7 +101,10 @@ body {
     pointer-events: none;
 }
 .square .highlight-overlay.last-move { background-color: var(--last-move-highlight); }
-.square .highlight-overlay.highlight { background-color: var(--highlight-color); }
+.square .highlight-overlay.highlight { 
+    background-color: var(--highlight-color);
+    border-radius: 50%;
+}
 
 /* Renkler ve Efektler */
 .light { background-color: var(--light-square); }
@@ -128,6 +131,7 @@ body {
     z-index: 1000;
     opacity: 0.9;
     transform: translate(-50%, -50%);
+    display: none; /* Başlangıçta gizli */
 }
 
 /* Alt Kontrol Paneli */
