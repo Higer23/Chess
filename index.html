@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="de"> 
+ <head> 
+  <title>Modern Satranç AI</title> 
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"> 
+  <meta charset="UTF-8"> 
+  <style>
+        :root {
+            --board-size: 90vmin;
+            --bg-color: #2c2c2c;
+            --panel-bg: #3a3a3a;
+            --text-color: #e0e0e0;
+            --border-color: #555;
+            --button-bg: #505050;
+            --button-hover-bg: #6a6a6a;
+            
+            /* Tema Değişkenleri */
+            --board-bg-light: #EADDC5;
+            --board-bg-dark: #A88D6A;
+            --piece-color-light: #ffffff;
+            --piece-color-dark: #1a1a1a;
+            --highlight-move: rgba(255, 255, 0, 0.4);
+            --highlight-scope: rgba(244, 69, 69, 0.5);
+            --highlight-check: rgba(255, 0, 0, 0.6);
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        .game-layout {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        
+        .top-bottom-panel {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: var(--board-size);
+            margin: 5px 0;
+            padding: 5px;
+            background: var(--panel-bg);
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+
+        .captured-pieces {
+            font-size: calc(var(--board-size) / 16);
+            flex-grow: 1;
+        }
+
+        .timer {
+            font-size: calc(var(--board-size) / 14);
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+        }
+
+        #container-wrapper {
+            position: relative;
+            width: var(--board-size);
+            height: var(--board-size);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        }
+
+        .square {
+            position: absolute;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: calc(var(--board-size) / 8 * 0.75);
+            cursor: pointer;
+            transition: background-color 0.2s;
+            user-select: none;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+        .player-piece { color: var(--piece-color-light); }
+        .ai-piece { color: var(--piece-color-dark); }
+
+
+        .last-move { background-color: var(--highlight-move) !important; }
+        .scope { background-color: var(--highlight-scope) !important; }
+        .in-check { animation: pulse-red 1.2s infinite; }
+
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: inset 0 0 0 0 var(--highlight-check); }
+            50% { box-shadow: inset 0 0 0 5px var(--highlight-check); }
+        }
+
+        /* Ayarlar Paneli */
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            right: -320px;
+            width: 300px;
+            height: 100%;
+            background: var(--panel-bg);
+            box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+            transition: right 0.4s ease-in-out;
+            z-index: 1001;
+            padding: 10px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        .settings-panel.open { right: 0; }
+        .settings-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;}
+        .settings-header h3 { margin: 0; }
+        .close-btn { font-size: 24px; cursor: pointer; background: none; border: none; color: var(--text-color); }
+        .settings-content { overflow-y: auto; flex-grow: 1; padding-top: 10px; }
+        .settings-section { margin-bottom: 20px; }
+        .settings-section h4 { margin-top: 0; margin-bottom: 10px; color: #aaa; }
+        .settings-section label, .settings-section select, .settings-section button { display: block; width: 100%; margin-bottom: 10px; box-sizing: border-box; }
+        .settings-section select, .settings-section button { padding: 8px; border-radius: 5px; border: 1px solid var(--border-color); background: var(--button-bg); color: var(--text-color); }
+        .stats-grid { display: grid; grid-template-columns: auto 1fr; gap: 5px; }
+
+        /* Mobil Kontroller */
+        .mobile-controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            background: var(--panel-bg);
+            padding: 10px;
+            box-sizing: border-box;
+            box-shadow: 0 -5px 15px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+        .mobile-controls button {
+            background: var(--button-bg);
+            border: none;
+            color: var(--text-color);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 24px;
+            flex-grow: 1;
+            margin: 0 5px;
+        }
+        .mobile-controls button:hover { background: var(--button-hover-bg); }
+
+        /* Oyun Sonu Modalı */
+        #gameOverModal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); display: none; justify-content: center;
+            align-items: center; z-index: 1002;
+        }
+        .modal-content {
+            background: var(--panel-bg); padding: 30px; border-radius: 10px; text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+        .modal-content button {
+            padding: 10px 20px; font-size: 1em; cursor: pointer; border-radius: 5px;
+            border: none; background: var(--button-bg); color: white; margin-top: 20px;
+        }
+
+    </style> 
+ </head> 
+ <body> 
+  <div class="game-layout"> 
+   <div class="top-bottom-panel"> 
+    <div id="capturedByPlayer" class="captured-pieces"></div> 
+    <div id="aiTimer" class="timer">
+     --:--
+    </div> 
+   </div> 
+   <div id="container-wrapper"></div> 
+   <div class="top-bottom-panel"> 
+    <div id="capturedByAi" class="captured-pieces"></div> 
+    <div id="playerTimer" class="timer">
+     --:--
+    </div> 
+   </div> 
+  </div> 
+  <div class="mobile-controls"> <button id="undoBtnMobile" title="Geri Al">↩</button> <button id="newGameBtnMobile" title="Yeniden Başlat">🔄</button> <button id="settingsBtn" title="Ayarlar">⚙️</button> 
+  </div> 
+  <div id="settings-panel" class="settings-panel"> 
+   <div class="settings-header"> 
+    <h3>Ayarlar</h3> <button class="close-btn" id="closeSettingsBtn">×</button> 
+   </div> 
+   <div class="settings-content"> 
+    <div class="settings-section"> 
+     <h4>Tema</h4> <label for="colorThemeSelector">Tahta Rengi</label> <select id="colorThemeSelector"> <option value="classic">Klasik</option> <option value="marble">Mermer</option> <option value="bw">Siyah &amp; Beyaz</option> </select> 
+    </div> 
+    <div class="settings-section"> 
+     <h4>Oyun</h4> <label for="difficultySelector">Zorluk Seviyesi</label> <select id="difficultySelector"> <option value="easy">Leicht</option> <option value="medium" selected>Mittel</option> <option value="hard">Schwer</option> </select> <button id="fullscreenBtn">Tam Ekran</button> 
+    </div> 
+    <div class="settings-section"> 
+     <h4>Zaman</h4> <label for="timeSelector">Süre</label> <select id="timeSelector"> <option value="300">5 Dakika</option> <option value="600">10 Dakika</option> <option value="180">3 Dakika</option> <option value="99999">Sınırsız</option> </select> 
+    </div> 
+    <div class="settings-section"> 
+     <h4>Ses</h4> <label> <input type="checkbox" id="soundToggle" checked> Ses Efektleri </label> 
+    </div> 
+    <div class="settings-section"> 
+     <h4>İstatistik</h4> 
+     <div class="stats-grid"> <span>Oyun Süresi:</span><span id="gameTime">0:00</span> <span>Hamle Sayısı:</span><span id="moveCount">0</span> 
+     </div> 
+    </div> 
+   </div> 
+  </div> 
+  <div id="gameOverModal"> 
+   <div class="modal-content"> 
+    <h2 id="gameOverMessage"></h2> <button id="restartGameBtn">Erneut spielen</button> 
+   </div> 
+  </div> 
+  <audio id="moveSound" src="https://assets.mixkit.co/sfx/preview/mixkit-game-ball-tap-2073.mp3" preload="auto"></audio> 
+  <audio id="checkSound" src="https://assets.mixkit.co/sfx/preview/mixkit-video-game-alert-1369.mp3" preload="auto"></audio> 
+  <audio id="captureSound" src="https://assets.mixkit.co/sfx/preview/mixkit-arcade-mechanical-bling-210.mp3" preload="auto"></audio> 
+  <script>
+    (function() {
+        const containerWrapper = document.getElementById("container-wrapper");
+        const difficultySelector = document.getElementById('difficultySelector');
+        const colorThemeSelector = document.getElementById('colorThemeSelector');
+        const timeSelector = document.getElementById('timeSelector');
+        const undoBtnMobile = document.getElementById('undoBtnMobile');
+        const newGameBtnMobile = document.getElementById('newGameBtnMobile');
+        const restartGameBtn = document.getElementById('restartGameBtn');
+        const capturedByPlayerPanel = document.getElementById('capturedByPlayer');
+        const capturedByAiPanel = document.getElementById('capturedByAi');
+        const playerTimerDisplay = document.getElementById('playerTimer');
+        const aiTimerDisplay = document.getElementById('aiTimer');
+        const moveCountDisplay = document.getElementById('moveCount');
+        const gameTimeDisplay = document.getElementById('gameTime');
+        const gameOverModal = document.getElementById('gameOverModal');
+        const gameOverMessage = document.getElementById('gameOverMessage');
+        const settingsBtn = document.getElementById('settingsBtn');
+        const settingsPanel = document.getElementById('settings-panel');
+        const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const soundToggle = document.getElementById('soundToggle');
+        const moveSound = document.getElementById('moveSound');
+        const checkSound = document.getElementById('checkSound');
+        const captureSound = document.getElementById('captureSound');
+
+        let values = [];
+        let sqs = [];
+        let myTurn = true;
+        let moveable = false;
+        let moveTarget = -1;
+        let moveScopes = [];
+        let difficultyLevel = 'medium';
+        let moveHistoryStack = [];
+        let lastMove = { from: -1, to: -1 };
+        let moveCount = 0;
+        
+        let playerTime, aiTime;
+        let playerTimer, aiTimer, gameTimer;
+        let gameStartTime;
+        let selectedTime = 300;
+
+        const fonts = { 'unicode': { 'k': '&#9818;', 'q': '&#9819;', 'r': '&#9820;', 'b': '&#9821;', 'n': '&#9822;', 'p': '&#9823;', 'l': '&#9812;', 'w': '&#9813;', 't': '&#9814;', 'v': '&#9815;', 'm': '&#9816;', 'o': '&#9817;' }};
+        const colorPalettes = { 'classic': ['#EADDC5', '#A88D6A'], 'marble': ['#D1E1E1', '#80A4A4'], 'bw': ['#FFFFFF', '#4E4E4E'] };
+        let isSoundEnabled = true;
+
+        function init() {
+            setupBoardLayout();
+            addEventListeners();
+            resetGame();
+            window.addEventListener('resize', setupBoardLayout);
+        }
+
+        function setupBoardLayout() {
+            let w = window.innerWidth;
+            let h = window.innerHeight;
+            let availableHeight = h - 150;
+            let tsw = Math.min(w * 0.95, availableHeight);
+            document.documentElement.style.setProperty('--board-size', `${tsw}px`);
+            
+            containerWrapper.innerHTML = '';
+            sqs = [];
+            let sw = tsw / 8;
+
+            for (let n = 0; n < 64; n++) {
+                const square = document.createElement("div");
+                square.classList.add("square", "s" + n);
+                square.style.width = square.style.height = `${sw}px`;
+                square.style.top = `${sw * Math.floor(n / 8)}px`;
+                square.style.left = `${sw * Math.floor(n % 8)}px`;
+                square.dataset.index = n;
+                containerWrapper.appendChild(square);
+                sqs.push(square);
+                square.addEventListener("click", onSquareClick);
+            }
+            updateAllDisplays();
+        }
+
+        function addEventListeners() {
+            difficultySelector.addEventListener('change', (e) => difficultyLevel = e.target.value);
+            colorThemeSelector.addEventListener('change', updateSquareColor);
+            timeSelector.addEventListener('change', (e) => { selectedTime = parseInt(e.target.value); resetGame(); });
+            undoBtnMobile.addEventListener('click', undoMove);
+            newGameBtnMobile.addEventListener('click', resetGame);
+            restartGameBtn.addEventListener('click', () => { gameOverModal.style.display = 'none'; resetGame(); });
+            settingsBtn.addEventListener('click', () => settingsPanel.classList.add('open'));
+            closeSettingsBtn.addEventListener('click', () => settingsPanel.classList.remove('open'));
+            fullscreenBtn.addEventListener('click', toggleFullScreen);
+            soundToggle.addEventListener('change', (e) => isSoundEnabled = e.target.checked);
+        }
+
+        function playSound(sound) {
+            if (isSoundEnabled) {
+                sound.currentTime = 0;
+                sound.play().catch(e => console.log("Ses oynatma hatası:", e));
+            }
+        }
+
+        function resetGame() {
+            values = ['r','n','b','q','k','b','n','r','p','p','p','p','p','p','p','p',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,'o','o','o','o','o','o','o','o','t','m','v','w','l','v','m','t'];
+            myTurn = true;
+            moveable = false;
+            moveHistoryStack = [];
+            lastMove = { from: -1, to: -1 };
+            moveCount = 0;
+            saveState(); // Initial state
+            
+            stopTimers();
+            playerTime = aiTime = selectedTime;
+            updateTimerDisplays();
+            clearInterval(gameTimer);
+            gameStartTime = new Date();
+            if (selectedTime < 90000) {
+                gameTimer = setInterval(updateGameTime, 1000);
+                startTimer(true);
+            }
+            
+            updateAllDisplays();
+        }
+
+        function updateAllDisplays() {
+            updateBoard();
+            updateSquareColor();
+            updateCapturedPieces();
+            updateStats();
+            highlightLastMove();
+            highlightKingInCheck();
+        }
+
+        function updateBoard() {
+            for (let n = 0; n < 64; n++) {
+                const piece = values[n];
+                sqs[n].innerHTML = piece ? fonts.unicode[piece] : "";
+                sqs[n].className = 'square s' + n; // Reset classes
+                if (piece) {
+                    const isAiPiece = "prnbqk".indexOf(piece) >= 0;
+                    sqs[n].classList.add(isAiPiece ? 'ai-piece' : 'player-piece');
+                }
+            }
+        }
+        
+        function updateSquareColor() {
+            const [light, dark] = colorPalettes[colorThemeSelector.value];
+            document.documentElement.style.setProperty('--board-bg-light', light);
+            document.documentElement.style.setProperty('--board-bg-dark', dark);
+            
+            for (let n = 0; n < 64; n++) {
+                const isEvenRow = Math.floor(n / 8) % 2 === 0;
+                const isEvenCol = n % 2 === 0;
+                sqs[n].style.background = ((isEvenRow && isEvenCol) || (!isEvenRow && !isEvenCol)) ? light : dark;
+            }
+            if(moveable) {
+                 moveScopes.forEach(s => sqs[s].classList.add('scope'));
+            }
+        }
+
+        function updateCapturedPieces() {
+            const state = moveHistoryStack[moveHistoryStack.length - 1] || { capturedByPlayer: [], capturedByAi: [] };
+            capturedByPlayerPanel.innerHTML = (state.capturedByPlayer || []).map(p => fonts.unicode[p]).join('');
+            capturedByAiPanel.innerHTML = (state.capturedByAi || []).map(p => fonts.unicode[p]).join('');
+        }
+
+        function updateStats() {
+            moveCountDisplay.textContent = Math.floor(moveCount / 2);
+        }
+
+        function updateGameTime() {
+             const now = new Date();
+             const diff = Math.floor((now - gameStartTime) / 1000);
+             const minutes = String(Math.floor(diff / 60)).padStart(2, '0');
+             const seconds = String(diff % 60).padStart(2, '0');
+             gameTimeDisplay.textContent = `${minutes}:${seconds}`;
+        }
+        
+        function highlightKingInCheck() {
+            document.querySelectorAll('.in-check').forEach(el => el.classList.remove('in-check'));
+            const playerKingPos = values.indexOf('l');
+            if (playerKingPos !== -1 && isSquareAttacked(playerKingPos, 'black', values)) {
+                sqs[playerKingPos].classList.add('in-check');
+                playSound(checkSound);
+            }
+        }
+
+        function highlightLastMove() {
+            document.querySelectorAll('.last-move').forEach(el => el.classList.remove('last-move'));
+            if (lastMove.from !== -1) {
+                sqs[lastMove.from].classList.add('last-move');
+                sqs[lastMove.to].classList.add('last-move');
+            }
+        }
+        
+        function startTimer(isPlayerTurn) {
+            stopTimers();
+            if (selectedTime > 90000) return;
+            
+            if (isPlayerTurn) {
+                playerTimer = setInterval(() => {
+                    playerTime--;
+                    if (playerTime <= 0) { playerTime=0; showGameOver("Zeitüberschreitung! KI gewinnt."); }
+                    updateTimerDisplays();
+                }, 1000);
+            } else {
+                aiTimer = setInterval(() => {
+                    aiTime--;
+                    if (aiTime <= 0) { aiTime=0; showGameOver("Zeitüberschreitung! Du gewinnst."); }
+                    updateTimerDisplays();
+                }, 1000);
+            }
+        }
+
+        function stopTimers() {
+            clearInterval(playerTimer);
+            clearInterval(aiTimer);
+        }
+
+        function updateTimerDisplays() {
+            const formatTime = (time) => {
+                if (time > 90000) return "∞";
+                const minutes = String(Math.floor(time / 60)).padStart(1, '0');
+                const seconds = String(time % 60).padStart(2, '0');
+                return `${minutes}:${seconds}`;
+            };
+            playerTimerDisplay.textContent = formatTime(playerTime);
+            aiTimerDisplay.textContent = formatTime(aiTime);
+        }
+        
+        function onSquareClick() {
+            if (!myTurn) return;
+            const n = parseInt(this.dataset.index, 10);
+            
+            if (!moveable) {
+                if ("otmvlw".indexOf(values[n]) >= 0) {
+                    const scopes = getValidMoves(n, values);
+                    if (scopes.length > 0) {
+                        moveable = true;
+                        moveTarget = n;
+                        moveScopes = scopes;
+                        updateSquareColor();
+                    }
+                }
+            } else {
+                if (moveScopes.includes(n)) {
+                    executeMove(moveTarget, n);
+                }
+                resetSelection();
+            }
+        }
+        
+        function resetSelection() {
+            moveable = false;
+            moveScopes = [];
+            moveTarget = -1;
+            updateSquareColor();
+        }
+
+        function executeMove(from, to) {
+             const capturedPiece = values[to];
+             saveState(capturedPiece, false);
+             if(capturedPiece) { playSound(captureSound); } else { playSound(moveSound); }
+
+             values[to] = values[from];
+             values[from] = 0;
+             if (values[to] === "o" && to < 8) values[to] = "w";
+             
+             lastMove = { from, to };
+             moveCount++;
+             myTurn = false;
+             updateAllDisplays();
+             
+             startTimer(false);
+             setTimeout(aiTurn, 250);
+        }
+        
+        function saveState(captured, isAi) {
+             const lastState = moveHistoryStack[moveHistoryStack.length - 1] || { capturedByPlayer: [], capturedByAi: [] };
+             const newState = {
+                 values: [...values],
+                 capturedByPlayer: [...lastState.capturedByPlayer],
+                 capturedByAi: [...lastState.capturedByAi],
+                 lastMove: {...lastMove},
+                 moveCount: moveCount,
+                 playerTime: playerTime,
+                 aiTime: aiTime
+             };
+             if (captured) {
+                 if(isAi) newState.capturedByAi.push(captured);
+                 else newState.capturedByPlayer.push(captured);
+             }
+             moveHistoryStack.push(newState);
+        }
+        
+        function undoMove() {
+            if (moveHistoryStack.length <= 2) return;
+            moveHistoryStack.pop(); 
+            const prevState = moveHistoryStack[moveHistoryStack.length - 1];
+            
+            values = [...prevState.values];
+            lastMove = {...prevState.lastMove};
+            moveCount = prevState.moveCount;
+            playerTime = prevState.playerTime;
+            aiTime = prevState.aiTime;
+            myTurn = true;
+            
+            stopTimers();
+            startTimer(true);
+            updateAllDisplays();
+        }
+        
+        function aiTurn() {
+            let allAiMoves = [];
+            for (let n = 0; n < 64; n++) {
+                if ("prnbqk".indexOf(values[n]) >= 0) {
+                    getValidMoves(n, values).forEach(s => {
+                         allAiMoves.push({ from: n, to: s, value: evaluateMove(n, s, values) });
+                    });
+                }
+            }
+
+            if (allAiMoves.length === 0) {
+                showGameOver(isSquareAttacked(values.indexOf('k'), 'black', values) ? "Schachmatt! Du gewinnst." : "Patt! Unentschieden.");
+                return;
+            }
+
+            allAiMoves.sort((a, b) => b.value - a.value);
+            let bestMove;
+            if (difficultyLevel === 'easy') { bestMove = allAiMoves[Math.floor(Math.random() * allAiMoves.length)]; }
+            else if (difficultyLevel === 'medium') { const topMoves = allAiMoves.slice(0, 3); bestMove = topMoves[Math.floor(Math.random() * topMoves.length)]; }
+            else { bestMove = allAiMoves[0]; }
+            
+            const captured = values[bestMove.to];
+            saveState(captured, true);
+            if(captured) { playSound(captureSound); } else { playSound(moveSound); }
+
+            values[bestMove.to] = values[bestMove.from];
+            values[bestMove.from] = 0;
+            if (values[bestMove.to] === "p" && bestMove.to >= 56) values[bestMove.to] = "q";
+            
+            lastMove = { from: bestMove.from, to: bestMove.to };
+            moveCount++;
+            myTurn = true;
+            
+            updateAllDisplays();
+            startTimer(true);
+
+            if (!playerHasMoves()) {
+                showGameOver(isSquareAttacked(values.indexOf('l'), 'white', values) ? "Schachmatt! KI gewinnt." : "Patt! Unentschieden.");
+            }
+        }
+        
+        function evaluateMove(from, to, board) {
+            let score = Math.random() * 0.1;
+            const pieceValues = { 'l': 900, 'w': 90, 't': 50, 'v': 30, 'm': 30, 'o': 10 };
+            const capturedPiece = board[to];
+            if (capturedPiece) score += pieceValues[capturedPiece];
+            return score;
+        }
+
+        function getValidMoves(n, board) {
+            const piece = board[n];
+            const isWhite = "prnbqk".indexOf(piece) >= 0;
+            let moves = isWhite ? (checkWhite(n, board) || []) : (checkBlack(n, board) || []);
+            
+            return moves.filter(move => {
+                const tempBoard = [...board];
+                tempBoard[move] = tempBoard[n];
+                tempBoard[n] = 0;
+                const kingPos = tempBoard.indexOf(isWhite ? 'k' : 'l');
+                return kingPos === -1 || !isSquareAttacked(kingPos, isWhite ? 'black' : 'white', tempBoard);
+            });
+        }
+        
+        function isSquareAttacked(squareIndex, byColor, board) {
+            const opponentPieces = byColor === 'white' ? "prnbqk" : "otmvlw";
+            for (let i = 0; i < 64; i++) {
+                if (opponentPieces.indexOf(board[i]) !== -1) {
+                    const moves = (byColor === 'white' ? checkWhite(i, board, true) : checkBlack(i, board, true)) || [];
+                    if (moves.includes(squareIndex)) return true;
+                }
+            }
+            return false;
+        }
+        
+        function playerHasMoves() {
+            for (let i = 0; i < 64; i++) {
+                if ("otmvlw".indexOf(values[i]) !== -1) {
+                    if (getValidMoves(i, values).length > 0) return true;
+                }
+            }
+            return false;
+        }
+
+        function showGameOver(message) {
+            stopTimers();
+            clearInterval(gameTimer);
+            myTurn = false;
+            gameOverMessage.textContent = message;
+            gameOverModal.style.display = 'flex';
+        }
+        
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+            else document.exitFullscreen();
+        }
+
+        function checkBlack(n, values, ignoreKingCheck = false) {
+            var target = values[n]; var scopes = []; var x = n;
+            if (target === "o") {
+                x -= 8; if ("prnbkq".indexOf(values[x - 1]) >= 0 && x % 8 != 0) { scopes.push(x - 1); }
+                if ("prnbkq".indexOf(values[x + 1]) >= 0 && x % 8 != 7) { scopes.push(x + 1); }
+                if (x >= 0 && values[x] === 0) { scopes.push(x); if (Math.floor(n/8) == 6 && values[x - 8] === 0) { scopes.push(x - 8); } }
+            } else if (target === "t" || target === "w") {
+                [[ -8], [8], [-1], [1]].forEach(d => { let c = n; while (true) { c += d[0]; if (c < 0 || c > 63 || ((d[0] === 1 || d[0] === -1) && Math.floor(c / 8) !== Math.floor(n / 8))) break; if (values[c] === 0) scopes.push(c); else { if ("prnbqk".indexOf(values[c]) >= 0) scopes.push(c); break; } } });
+            } if (target === "v" || target === "w") {
+                [[ -9], [-7], [7], [9]].forEach(d => { let c = n; while (true) { let pr = Math.floor(c / 8); c += d[0]; let cr = Math.floor(c / 8); if (c < 0 || c > 63 || Math.abs(pr - cr) !== 1) break; if (values[c] === 0) scopes.push(c); else { if ("prnbqk".indexOf(values[c]) >= 0) scopes.push(c); break; } } });
+            } else if (target === "m") {
+                [ -17, -15, -10, -6, 6, 10, 15, 17].forEach(m => { let t = n + m; if (t >= 0 && t < 64 && Math.abs(n % 8 - t % 8) <= 2) { if (values[t] === 0 || "prnbqk".indexOf(values[t]) >= 0) scopes.push(t); } });
+            } else if (target === "l") {
+                [ -9, -8, -7, -1, 1, 7, 8, 9].forEach(m => { let t = n + m; if (t >= 0 && t < 64 && Math.abs(n % 8 - t % 8) <= 1) { if (values[t] === 0 || "prnbqk".indexOf(values[t]) >= 0) scopes.push(t); } });
+            } return scopes;
+        }
+
+        function checkWhite(n, values, ignoreKingCheck = false) {
+            var target = values[n]; var scopes = []; var x = n;
+            if (target === "p") {
+                x += 8; if ("otmvlw".indexOf(values[x - 1]) >= 0 && x % 8 != 0) { scopes.push(x - 1); }
+                if ("otmvlw".indexOf(values[x + 1]) >= 0 && x % 8 != 7) { scopes.push(x + 1); }
+                if (x < 64 && values[x] === 0) { scopes.push(x); if (Math.floor(n/8) == 1 && values[x + 8] === 0) { scopes.push(x + 8); } }
+            } else if (target === "r" || target === "q") {
+                [[ -8], [8], [-1], [1]].forEach(d => { let c = n; while (true) { c += d[0]; if (c < 0 || c > 63 || ((d[0] === 1 || d[0] === -1) && Math.floor(c / 8) !== Math.floor(n / 8))) break; if (values[c] === 0) scopes.push(c); else { if ("otmvlw".indexOf(values[c]) >= 0) scopes.push(c); break; } } });
+            } if (target === "b" || target === "q") {
+                [[ -9], [-7], [7], [9]].forEach(d => { let c = n; while (true) { let pr = Math.floor(c / 8); c += d[0]; let cr = Math.floor(c / 8); if (c < 0 || c > 63 || Math.abs(pr - cr) !== 1) break; if (values[c] === 0) scopes.push(c); else { if ("otmvlw".indexOf(values[c]) >= 0) scopes.push(c); break; } } });
+            } else if (target === "n") {
+                [ -17, -15, -10, -6, 6, 10, 15, 17].forEach(m => { let t = n + m; if (t >= 0 && t < 64 && Math.abs(n % 8 - t % 8) <= 2) { if (values[t] === 0 || "otmvlw".indexOf(values[t]) >= 0) scopes.push(t); } });
+            } else if (target === "k") {
+                [ -9, -8, -7, -1, 1, 7, 8, 9].forEach(m => { let t = n + m; if (t >= 0 && t < 64 && Math.abs(n % 8 - t % 8) <= 1) { if (values[t] === 0 || "otmvlw".indexOf(values[t]) >= 0) scopes.push(t); } });
+            } return scopes;
+        }
+
+        init();
+    })();
+    </script> 
+ 
+</body></html>
